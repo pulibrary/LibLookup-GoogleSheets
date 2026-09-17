@@ -1,3 +1,7 @@
+/**
+ * @OnlyCurrentDoc
+ */
+
  const entityMap = {
     '&amp;': '&',
     '&lt;': '<',
