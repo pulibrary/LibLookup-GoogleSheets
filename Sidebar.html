@@ -136,13 +136,13 @@
                   updateStatus("Aborted")                  
                 } else {
                   updateStatus("Done!")
+                  google.script.run.withSuccessHandler(function(column) {
+                    document.querySelector("#resultColumn").value = column
+                  }).getFirstEmptyColumn()
+                  setMaxRowRange() 
                 }
                 abortButton.disabled = true   
-                submit.disabled = false 
-                google.script.run.withSuccessHandler(function(column) {
-                  document.querySelector("#resultColumn").value = column
-                }).getFirstEmptyColumn()
-                setMaxRowRange() 
+                submit.disabled = false                 
                 return
               }
               //Write the output buffer to the spreadsheet if it has content
