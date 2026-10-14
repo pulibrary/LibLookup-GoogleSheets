@@ -20,9 +20,13 @@ function onOpen() {
 }
 
 function showSidebar() {
-  var html = HtmlService.createHtmlOutputFromFile('Sidebar')
-      .setTitle('LibLookup');
+  var html = HtmlService.createTemplateFromFile('Sidebar')
+      .evaluate().setTitle('LibLookup');
   SpreadsheetApp.getUi().showSidebar(html);
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
 function getMaxUsedRow() {
