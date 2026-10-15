@@ -6,6 +6,7 @@
         var abort = false
         response.text().then(form => {             
           document.getElementById("content").innerHTML = form  
+          console.log(form)
           //load any embedded JS files
           document.querySelector("form").querySelectorAll("script").forEach((script) => {
             var newScript = document.createElement('script')
