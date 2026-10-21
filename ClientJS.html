@@ -1,218 +1,217 @@
 <script>
+  runLibLookup(document)  
+  async function runLibLookup(doc) {
     const libLookupDomain = "https://localhost:3950/"
     //get the search form
-    fetch(libLookupDomain + '?pageType=plugin') 
-      .then(response => {
-        var abort = false
-        response.text().then(form => {             
-          document.getElementById("content").innerHTML = form  
-          console.log(form)
-          //load any embedded JS files
-          document.querySelector("form").querySelectorAll("script").forEach((script) => {
-            var newScript = document.createElement('script')
-            newScript.src = script.src
-            newScript.type = script.type
-            document.head.appendChild(newScript);
-          })    
+    var formResponse
+    try {
+      formResponse = await fetch(libLookupDomain + '?pageType=plugin') 
+    } catch (err) {
+      console.log(err)
+      doc.getElementById("content").innerHTML = "LibLookup Desktop app is not running."
+      return
+    }
 
-          //determine the used portion of the spreadsheet
-          //(so that the row range and result column controls
-          // can be set appropriately)
-          google.script.run.withSuccessHandler(function(column) {
-            document.querySelector("#resultColumn").value = column
-          }).getFirstEmptyColumn()
+    var abort = false
+    const form = await formResponse.text()
+
+    doc.getElementById("content").innerHTML = form  
+    //load any embedded JS files
+    doc.querySelector("form").querySelectorAll("script").forEach((script) => {
+      var newScript = doc.createElement('script')
+      newScript.src = script.src
+      newScript.type = script.type
+      doc.head.appendChild(newScript);
+    })    
+
+    //determine the used portion of the spreadsheet
+    //(so that the row range and result column controls
+    // can be set appropriately)
+    google.script.run.withSuccessHandler(function(column) {
+      doc.querySelector("#resultColumn").value = column
+    }).getFirstEmptyColumn()
           
-          setMaxRowRange() 
+    setMaxRowRange(doc) 
           
+    doc.querySelector('#abortButton').addEventListener('click', () => {        
+      abort = true
+    })
 
-          document.querySelector('#abortButton').addEventListener('click', () => {        
-            abort = true
-          })
+    doc.querySelector("#allRowsButton").addEventListener('click', () => {
+      setMaxRowRange(doc)
+    })
 
-          document.querySelector("#allRowsButton").addEventListener('click', () => {
-            setMaxRowRange()
-          })
+    //action when form is submitted
+    var queryForm = doc.getElementById('queryForm')
+    queryForm?.addEventListener('submit', async function(event) {
+      event.preventDefault()
+      abortButton.disabled = false
+      submit.disabled = true
+      abort = false
+      doc.getElementById('resultCount').innerHTML = ''
 
-          //action when form is submitted
-          var queryForm = document.getElementById('queryForm')
-          queryForm?.addEventListener('submit', function(event) {
-            event.preventDefault()
-            abortButton.disabled = false
-            submit.disabled = true
-            abort = false
-            document.getElementById('resultCount').innerHTML = ''
+      const pollingInterval = 100
 
-            const pollingInterval = 100
+      var formData = new FormData(event.target)
+      var catalog = formData.get('catalog')
+      var query = formData.get('q')
+      var fields = formData.get('displayFields')
+      var maxRecs = formData.get('maxRecs')
+      var totalResults = -1
+      var startRow = 1
+      var startColumn = 1
+      var increment = 50
+      var readyForNext = false
+      var catalogLink = ""
 
-            var formData = new FormData(event.target)
-            var catalog = formData.get('catalog')
-            var query = formData.get('q')
-            var fields = formData.get('displayFields')
-            var maxRecs = formData.get('maxRecs')
-            var totalResults = -1
-            var startRow = 1
-            var startColumn = 1
-            var increment = 50
-            var readyForNext = false
-            var catalogLink = ""
+      updateStatus(doc,"Searching...")
 
-            updateStatus("Searching...")
-
-            var queryDecoded = decodeURIComponent(query)
-            var rangeStart = document.querySelector("#startrow").value
-            var rangeEnd = document.querySelector("#endrow").value
-            const batchRanges = queryDecoded.match(/\[\[[^\]]+\]\]/g)?.map(range => range.replaceAll(/\[\[([A-Z]+)\]\]/g, "$1" + rangeStart + ":$1" + rangeEnd))
+      var queryDecoded = decodeURIComponent(query)
+      var rangeStart = doc.querySelector("#startrow").value
+      var rangeEnd = doc.querySelector("#endrow").value
+      const batchRanges = queryDecoded.match(/\[\[[^\]]+\]\]/g)?.map(range => range.replaceAll(/\[\[([A-Z]+)\]\]/g, "$1" + rangeStart + ":$1" + rangeEnd))
   
-            //First, the set of query URLs is constructed before any of them are run
-            var queryBatch = []
-            if(batchRanges) { //batch mode (query performed for each row)
-              startRow = parseInt(batchRanges.join().match(/\d+/)?.[0])
-              startColumn = columnLetterToNumber(document.querySelector("#resultColumn").value)
-              google.script.run.withSuccessHandler(function(rangeValues) {
-                for(var i = 0; i < rangeValues[0].length; i++) {
-                  var thisQuery = queryDecoded
-                  for(var j = 0; j < rangeValues.length; j++) {
-                    var val = rangeValues[j][i].toString().replaceAll("\"","\\\"")
-                    if(val != "") {
-                      thisQuery = thisQuery.replace(/\[\[[^\]]+\]\]/,val)    
-                    } else {
-                      thisQuery = thisQuery.replace(/\[\[[^\]]+\]\]/,"")   
-                    }
-                  }  
-                  const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + 
-                    encodeURIComponent(thisQuery) + '&displayFields=' + fields + '&start=1&maxRecs=' + maxRecs     
-                  queryBatch.push(queryURL)               
-                }    
-                readyForNext = true                            
-              }).getRangeValues(batchRanges)  
-            } else { //query mode (one query, spreadsheet populated with all results)
-
-              //The 'inital URL' is queried in order to get a result count
-              const initialURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + fields + '&start=1&maxRecs=1'
-              fetch(initialURL).then(data => {
-                data.json().then(tableJSON => {
-                  if(tableJSON.catalogLink != "" && catalogLink == "") {
-                    catalogLink = tableJSON.catalogLink
-                    document.getElementById("catalogLink").innerHTML = `<a target="_blank" href="${catalogLink}">View in Catalog</a>`
-                  }
-                  totalResults = tableJSON.numberOfRecords
-                  document.getElementById('resultCount').innerHTML = 'Found ' + totalResults + ' results'
-                  var queryMax = Math.min(maxRecs,totalResults)
-                  for(var i = 1; i <= queryMax; i += increment) {
-                    const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + fields + '&start=' + i + '&maxRecs=' + Math.min(increment, queryMax-i+1)
-                    queryBatch.push(queryURL) 
-                  }
-                  readyForNext = true              
-                })
-              })
-            }
-
-            var i = 0
-            var completeQueries = 0
-            var outputBuffer = []
-            var writeLock = false
-
-            //Run all the queries calculated above.  This loop can be interrupted with
-            //the 'abort' button.
-            var queryInterval = setInterval(() => {
-              if(!readyForNext) {
-                return
+      //First, the set of query URLs is constructed before any of them are run
+      var queryBatch = []
+      if(batchRanges) { //batch mode (query performed for each row)
+        startRow = parseInt(batchRanges.join().match(/\d+/)?.[0])
+        startColumn = columnLetterToNumber(doc.querySelector("#resultColumn").value)
+        google.script.run.withSuccessHandler(function(rangeValues) {
+          for(var i = 0; i < rangeValues[0].length; i++) {
+            var thisQuery = queryDecoded
+            for(var j = 0; j < rangeValues.length; j++) {
+              var val = rangeValues[j][i].toString().replaceAll("\"","\\\"")
+              if(val != "") {
+                thisQuery = thisQuery.replace(/\[\[[^\]]+\]\]/,val)    
+              } else {
+                thisQuery = thisQuery.replace(/\[\[[^\]]+\]\]/,"")   
               }
-              if(completeQueries == queryBatch.length || abort) {
-                clearInterval(queryInterval)
-                if(abort) {
-                  updateStatus("Aborted")                  
-                } else {
-                  updateStatus("Done!")
-                  google.script.run.withSuccessHandler(function(column) {
-                    document.querySelector("#resultColumn").value = column
-                  }).getFirstEmptyColumn()
-                  setMaxRowRange() 
-                }
-                abortButton.disabled = true   
-                submit.disabled = false                 
-                return
-              }
-              //Write the output buffer to the spreadsheet if it has content
-              if(batchRanges && !writeLock && outputBuffer.length > 0) {
-                writeLock = true
-                var writeBuffer = [...outputBuffer]
-                var writeRow = startRow+i-writeBuffer.length+1
-                outputBuffer = []
-                google.script.run.withSuccessHandler(function() {
-                  completeQueries = writeRow+writeBuffer.length-1-startRow
-                  writeLock = false
-                }).processData(writeBuffer,writeRow,startColumn,true)
-              }
-
-
-              if(i == queryBatch.length) {
-                updateStatus("Finalizing...")
-                return
-              }   
-              readyForNext = false
-
-              const queryURL = queryBatch[i]
-
-              //fetch the URL and put the results in the output buffer
-              fetch(queryURL).then(data => {
-                data.json().then(tableJSON => {                  
-                  if(batchRanges) {
-                    updateStatus("Searching row " + (i+1) + " of " + queryBatch.length)
-                    var combinedBody = Array(tableJSON.records[0].length).fill("")
-                    for(var j = 1; j < tableJSON.records.length; j++) {
-                      if(j == 1) {
-                        combinedBody = tableJSON.records[1]
-                      } else {
-                        combinedBody = combinedBody.map((field, index) => field + "|" + tableJSON.records[j][index])
-                      }
-                    }
-                    if(outputBuffer.length == 0) {
-                      outputBuffer.push(tableJSON.records[0])
-                    }
-                    outputBuffer.push(combinedBody)                              
-                  } else {    
-                    updateStatus("Retrieved " + Math.min(((i+1)*increment),maxRecs,totalResults) + " of " + Math.min(maxRecs,totalResults) + "  records")
-                    google.script.run.withSuccessHandler(function() {
-                      if(i == 0) {
-                        i++
-                        readyForNext = true  
-                      }
-                      completeQueries++            
-                    }).processData(tableJSON.records,(i>0) ? (i*increment+2) : 1,1,(i>0))                
-                  }
-                  if(i>0 || batchRanges) {
-                    i++
-                    readyForNext = true                        
-                  }
-                })
-              })  
-            },pollingInterval)                        
-          })
-        })
-      }).catch(err => {
-        document.getElementById("content").innerHTML = "LibLookup Desktop app is not running."
-      })      
-
-      function setMaxRowRange() {
-        google.script.run.withSuccessHandler(function(maxrow) {  
-            document.querySelector("#startrow").value = 1
-            document.querySelector("#endrow").value = (maxrow > 0) ? maxrow : 1           
-          }).getMaxUsedRow()        
-      }  
-      
-      function updateStatus(status) {
-        document.getElementById('status').innerHTML = status
-      }
-      
-      function columnLetterToNumber(letter) {
-        let columnNumber = 0;
-        let cleanLetter = letter.toUpperCase();
-  
-        for (let i = 0; i < cleanLetter.length; i++) {
-          columnNumber = columnNumber * 26 + (cleanLetter.charCodeAt(i) - 64);
+            }  
+            const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + 
+              encodeURIComponent(thisQuery) + '&displayFields=' + fields + '&start=1&maxRecs=' + maxRecs     
+            queryBatch.push(queryURL)               
+          }    
+          readyForNext = true                            
+        }).getRangeValues(batchRanges)  
+      } else { //query mode (one query, spreadsheet populated with all results)
+        //The 'inital URL' is queried in order to get a result count
+        const initialURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + fields + '&start=1&maxRecs=1'
+        const data = await fetch(initialURL)
+        const tableJSON = await data.json()
+        if(tableJSON.catalogLink != "" && catalogLink == "") {
+          catalogLink = tableJSON.catalogLink
+          doc.getElementById("catalogLink").innerHTML = `<a target="_blank" href="${catalogLink}">View in Catalog</a>`
         }
-  
-        return columnNumber;
+        totalResults = tableJSON.numberOfRecords
+        doc.getElementById('resultCount').innerHTML = 'Found ' + totalResults + ' results'
+        var queryMax = Math.min(maxRecs,totalResults)
+        for(var i = 1; i <= queryMax; i += increment) {
+          const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + fields + '&start=' + i + '&maxRecs=' + Math.min(increment, queryMax-i+1)
+          queryBatch.push(queryURL) 
+        }
+        readyForNext = true              
+
       }
-    </script>
+
+      var i = 0
+      var completeQueries = 0
+      var outputBuffer = []
+      var writeLock = false
+
+      //Run all the queries calculated above.  This loop can be interrupted with
+      //the 'abort' button.
+      var queryInterval = setInterval(async () => {
+        if(!readyForNext) {
+          return
+        }
+        if(completeQueries == queryBatch.length || abort) {
+          clearInterval(queryInterval)
+          if(abort) {
+            updateStatus(doc,"Aborted")                  
+          } else {
+            updateStatus(doc,"Done!")
+            google.script.run.withSuccessHandler(function(column) {
+              doc.querySelector("#resultColumn").value = column
+            }).getFirstEmptyColumn()
+            setMaxRowRange(doc) 
+          }
+          abortButton.disabled = true   
+          submit.disabled = false                 
+          return
+        }
+        //Write the output buffer to the spreadsheet if it has content
+        if(batchRanges && !writeLock && outputBuffer.length > 0) {
+          writeLock = true
+          var writeBuffer = [...outputBuffer]
+          var writeRow = startRow+i-writeBuffer.length+1
+          outputBuffer = []
+          google.script.run.withSuccessHandler(function() {
+            completeQueries = writeRow+writeBuffer.length-1-startRow
+            writeLock = false
+          }).processData(writeBuffer,writeRow,startColumn,true)
+        }
+
+        if(i == queryBatch.length) {
+          updateStatus(doc,"Finalizing...")
+          return
+        }   
+        readyForNext = false
+        const queryURL = queryBatch[i]
+
+        //fetch the URL and put the results in the output buffer
+        const data = await fetch(queryURL)
+        const tableJSON = await data.json()               
+        if(batchRanges) {
+          updateStatus(doc,"Searching row " + (i+1) + " of " + queryBatch.length)
+          var combinedBody = Array(tableJSON.records[0].length).fill("")
+          for(var j = 1; j < tableJSON.records.length; j++) {
+            if(j == 1) {
+              combinedBody = tableJSON.records[1]
+            } else {
+              combinedBody = combinedBody.map((field, index) => field + "|" + tableJSON.records[j][index])
+            }
+          }
+          if(outputBuffer.length == 0) {
+            outputBuffer.push(tableJSON.records[0])
+          }
+          outputBuffer.push(combinedBody)                              
+        } else {    
+          updateStatus(doc,"Retrieved " + Math.min(((i+1)*increment),maxRecs,totalResults) + " of " + Math.min(maxRecs,totalResults) + "  records")
+          google.script.run.withSuccessHandler(function() {
+            if(i == 0) {
+              i++
+              readyForNext = true  
+            }
+            completeQueries++            
+          }).processData(tableJSON.records,(i>0) ? (i*increment+2) : 1,1,(i>0))                
+        }
+        if(i>0 || batchRanges) {
+          i++
+          readyForNext = true                        
+        }
+      },pollingInterval)                        
+    })
+  }  
+
+  function setMaxRowRange(doc) {
+    google.script.run.withSuccessHandler(function(maxrow) {  
+      doc.querySelector("#startrow").value = 1
+      doc.querySelector("#endrow").value = (maxrow > 0) ? maxrow : 1           
+    }).getMaxUsedRow()        
+  }  
+      
+  function updateStatus(doc,status) {
+    doc.getElementById('status').innerHTML = status
+  }
+      
+  function columnLetterToNumber(letter) {
+    let columnNumber = 0;
+    let cleanLetter = letter.toUpperCase();
+  
+    for (let i = 0; i < cleanLetter.length; i++) {
+      columnNumber = columnNumber * 26 + (cleanLetter.charCodeAt(i) - 64);
+    }
+  
+    return columnNumber;
+  }
+</script>

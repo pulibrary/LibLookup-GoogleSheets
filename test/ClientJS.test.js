@@ -2,9 +2,11 @@ const fs = require('fs')
 const path = require('path')
 const { JSDOM } = require("jsdom")
 const vm = require("vm");
+var ClientJS
 
 const sidebarHTML = '../Sidebar.html'
 const clientJSHTML = '../ClientJS.html'
+const clientJSFilename = '../ClientJS.js'
 const mockFormHTML = './MockForm.html'
 
 const notRunning = "LibLookup Desktop app is not running."
@@ -14,19 +16,25 @@ describe('Inline HTML JavaScript Test', () => {
   let fetchMock;
   let mockForm;
   let dom;
-  let script;
+
+  beforeAll(() => {
+    const clientJStext = fs.readFileSync(path.resolve(__dirname, clientJSHTML), 'utf8');
+    var script = clientJStext.replace(/^<script>/,"").replace(/<\/script>$/,"");
+    script = script.replace(/^\s*runLibLookup.*/,"\n")
+    const functions = clientJStext.match(/function [^(]+/g).map(f => f.replace(/^function /,""))
+    script += "\nmodule.exports = {" + functions.join(',') + "}"
+    fs.writeFileSync(path.resolve(__dirname,clientJSFilename),script,'utf8');
+    ClientJS = require("../ClientJS.js")
+  })
 
   beforeEach(() => {    
     const sidebar = fs.readFileSync(path.resolve(__dirname, sidebarHTML ), 'utf8');  
-    const clientJS = fs.readFileSync(path.resolve(__dirname, clientJSHTML), 'utf8');
     mockForm = fs.readFileSync(path.resolve(__dirname, mockFormHTML ), 'utf8');    
-    dom = new JSDOM(sidebar, {runScripts: 'dangerously'})
-    script = clientJS.replace(/^<script>/,"").replace(/<\/script>$/,"")
+    dom = new JSDOM(sidebar)
+    global.document = dom.window.document
     fetchMock = jest.fn()
-    global.window = dom.window
-    global.window.fetch = fetchMock
-    global.document = window.document
-    global.window.google = {
+    global.fetch = fetchMock
+    global.google = {
       script: {
         run: {
           // Mock handlers to return 'this' to allow chaining
@@ -50,10 +58,7 @@ describe('Inline HTML JavaScript Test', () => {
 
   test('Simulate LibLookup Desktop App not running', async () => {  
     fetchMock.mockRejectedValue(); 
-    const context = vm.createContext(window)
-    const module = new vm.SourceTextModule(script, { context });
-    await module.link(() => {});
-    await module.evaluate()
+    await ClientJS.runLibLookup(document)
     expect(document.querySelector("#content").innerHTML).toBe(notRunning)
   });
 
@@ -61,10 +66,8 @@ describe('Inline HTML JavaScript Test', () => {
     fetchMock.mockResolvedValue({
       text: async () => mockForm
     }); 
-    const context = vm.createContext(window)
-    const module = new vm.SourceTextModule(script, { context });
-    await module.link(() => {});
-    await module.evaluate()
+    await ClientJS.runLibLookup(document)
     expect(document.querySelector('#content').innerHTML.replaceAll(/\s/sg,"")).toBe(mockForm.replaceAll(/\s/sg,""))
+    expect(ClientJS.columnLetterToNumber("A")).toBe(1)
   })
 });
