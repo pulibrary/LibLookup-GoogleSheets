@@ -7,7 +7,6 @@
     try {
       formResponse = await fetch(libLookupDomain + '?pageType=plugin') 
     } catch (err) {
-      console.log(err)
       doc.getElementById("content").innerHTML = "LibLookup Desktop app is not running."
       return
     }
@@ -33,7 +32,9 @@
           
     setMaxRowRange(doc) 
           
-    doc.querySelector('#abortButton').addEventListener('click', () => {        
+    var abortButton = doc.querySelector('#abortButton')
+    var submit = doc.querySelector('#submit')
+    abortButton.addEventListener('click', () => {        
       abort = true
     })
 
