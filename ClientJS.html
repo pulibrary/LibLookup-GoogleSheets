@@ -122,7 +122,7 @@
       //Run all the queries calculated above.  This loop can be interrupted with
       //the 'abort' button.
       var queryInterval = setInterval(async () => {
-        if(!readyForNext) {
+        if(!readyForNext) {          
           return
         }
         if(completeQueries == queryBatch.length || abort) {
@@ -176,20 +176,14 @@
             outputBuffer.push(tableJSON.records[0])
           }
           outputBuffer.push(combinedBody)                              
-        } else {    
+        } else {   
           updateStatus(doc,"Retrieved " + Math.min(((i+1)*increment),maxRecs,totalResults) + " of " + Math.min(maxRecs,totalResults) + "  records")
           google.script.run.withSuccessHandler(function() {
-            if(i == 0) {
-              i++
-              readyForNext = true  
-            }
             completeQueries++            
           }).processData(tableJSON.records,(i>0) ? (i*increment+2) : 1,1,(i>0))                
         }
-        if(i>0 || batchRanges) {
-          i++
-          readyForNext = true                        
-        }
+        i++
+        readyForNext = true                        
       },pollingInterval)                        
     })
   }  
