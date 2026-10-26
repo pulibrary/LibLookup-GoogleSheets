@@ -15,9 +15,11 @@ const maxRowNumber = 1234
 
 const catalogs = ["Grievances","Petitions"]
 const query = "date = 1857"
+const batchQuery = "id = [[A]] AND date = [[B]]"
+const batchRanges = [[1,2,3,4,5,""],[6,7,8,9,0,""]]
 const fields = ['recno','name','type']
 const record = ['Arthur Clenham','Grievance']
-const catalogLink = "https://lib.circumlocution.go.uk/"
+const catalogLink = "https://office.circumlocution.go.uk/"
 const numberOfRecords = 200
 const pageSize = 50
 
@@ -39,6 +41,7 @@ describe('Inline HTML JavaScript Test', () => {
 
   beforeEach(() => {  
     jest.useFakeTimers()
+    jest.clearAllMocks()
     ClientJS = require("../ClientJS.js")  
     const sidebar = fs.readFileSync(path.resolve(__dirname, sidebarHTML ), 'utf8');  
     mockForm = fs.readFileSync(path.resolve(__dirname, mockFormHTML ), 'utf8');    
@@ -60,9 +63,12 @@ describe('Inline HTML JavaScript Test', () => {
             this._successHandler(firstEmptyColumnLetter)
           },
           getMaxUsedRow: function() {
-            this._successHandler(maxRowNumber)
+            this._successHandler((results) ? maxRowNumber: 0)
           },
-          processData: function(writeBuffer, writeRow, writeColumn, append) {
+          getRangeValues: function(ranges) {
+            this._successHandler(batchRanges)
+          }, 
+          processData: async function(writeBuffer, writeRow, writeColumn, append) {
             if(!append) {
               results = {records: [], row: 0, column: 0}
             } else {
@@ -71,6 +77,8 @@ describe('Inline HTML JavaScript Test', () => {
             results.row = writeRow
             results.column = writeColumn
             results.records.push(...writeBuffer)
+            //simulate latency of writing to spreadsheet
+            await jest.advanceTimersByTimeAsync(150)
             this._successHandler()
           }
         }
@@ -94,10 +102,11 @@ describe('Inline HTML JavaScript Test', () => {
 
   test('Successfully load form, run in query mode', async () => {
     let batchno = 0
+    let mode = "abort"
     
     fetchMock.mockResolvedValue({
       text: async () => mockForm,
-      json: async() => { 
+      json: async () => { 
         var recordsArray = [fields]
         if(batchno == 0) {
           recordsArray.push([1,1,...record])
@@ -108,8 +117,10 @@ describe('Inline HTML JavaScript Test', () => {
           }
         }
         batchno++
+        //simulate fetch latency
+        jest.advanceTimersToNextTimer()
         return {
-          catalogLink: catalogLink,
+          catalogLink:  (mode == "complete") ? catalogLink : "",
           numberOfRecords: numberOfRecords,
           records: recordsArray
         } 
@@ -123,22 +134,29 @@ describe('Inline HTML JavaScript Test', () => {
     document.querySelector("input[name='maxRecs']").value = numberOfRecords + 1
     document.querySelector("input[name='q']").value = query
     document.querySelector("input[name='displayFields']").value = fields.join("|")
+    document.querySelector('#allRowsButton').dispatchEvent(new window.Event('click'))
+    expect(document.querySelector("#endrow").value).toBe(String(1))
 
     const form = document.querySelector('#queryForm')
     form.dispatchEvent(new Event('submit'), {target: form})
     await jest.advanceTimersToNextTimerAsync()
+
     expect(document.querySelector("#status").innerHTML).toContain("Retrieved")
     document.querySelector('#abortButton').dispatchEvent(new Event('click'))
     await jest.advanceTimersToNextTimerAsync()
+
     expect(document.querySelector("#status").innerHTML).toContain("Aborted")
-    expect(results.row).toBe(1)
+
+    expect(results.row).toBe(pageSize+2)
     expect(results.column).toBe(1)
-    expect(results.records.length).toBe(pageSize+1)
+    expect(results.records.length).toBe((pageSize*2)+1)
 
     batchno = 0
+    mode = "complete"
     form.dispatchEvent(new Event('submit'), {target: form})
     while(document.querySelector("#status").innerHTML != 'Done!') {
       await jest.advanceTimersToNextTimerAsync()
+
     }
     expect(results.records.length).toBe(numberOfRecords+1)
 
@@ -152,5 +170,50 @@ describe('Inline HTML JavaScript Test', () => {
     document.querySelector('#allRowsButton').dispatchEvent(new window.Event('click'))
     expect(document.querySelector('#startrow').value).toBe(String(1))
     expect(document.querySelector('#endrow').value).toBe(String(maxRowNumber))
+    expect(document.querySelector("#catalogLink").innerHTML).toContain(catalogLink)
   })
+
+  test('Successfully load form, run in batch mode', async () => {
+    let batchno = 1
+    results = {records: [], row: 0, column: 0}
+
+    fetchMock.mockResolvedValue({
+      text: async () => mockForm,
+      json: async () => { 
+        var recordsArray = [fields]
+        for(i = 1; i <= batchno; i++) {
+          recordsArray.push([batchno,batchno,...record])
+        }
+        batchno++
+        //simulate fetch latency
+        jest.advanceTimersToNextTimer()
+        return {
+          catalogLink: "",
+          numberOfRecords: recordsArray.length,
+          records: recordsArray
+        } 
+      }
+    }); 
+
+    await ClientJS.runLibLookup(document)
+    document.querySelector("select[name='catalog']").innerHTML = 
+      catalogs.map(c => `<option>${c}</option>`)
+    document.querySelector("select[name='catalog']").value = catalogs[1]
+    document.querySelector("input[name='maxRecs']").value = numberOfRecords
+    document.querySelector("input[name='q']").value = batchQuery
+    document.querySelector("input[name='displayFields']").value = fields.join("|")
+    document.querySelector("input[name='startrow']").value = 1
+    document.querySelector("input[name='endrow']").value = batchRanges[0].length
+    document.querySelector("input[name='resultColumn']").value = firstEmptyColumnLetter
+
+    const form = document.querySelector('#queryForm')
+    form.dispatchEvent(new Event('submit'), {target: form})
+    await jest.advanceTimersToNextTimerAsync()
+    expect(document.querySelector("#status").innerHTML).toContain("Searching row")
+    while(document.querySelector("#status").innerHTML != 'Done!') {
+      await jest.advanceTimersToNextTimerAsync()
+    }
+    expect(results.records.length).toBe(batchRanges[0].length)
+  })
+
 });

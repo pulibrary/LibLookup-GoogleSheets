@@ -34,7 +34,7 @@
           
     var abortButton = doc.querySelector('#abortButton')
     var submit = doc.querySelector('#submit')
-    abortButton.addEventListener('click', () => {        
+    abortButton.addEventListener('click', () => { 
       abort = true
     })
 
@@ -63,7 +63,6 @@
       var startColumn = 1
       var increment = 50
       var readyForNext = false
-      var catalogLink = ""
 
       updateStatus(doc,"Searching...")
 
@@ -89,7 +88,7 @@
               }
             }  
             const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + 
-              encodeURIComponent(thisQuery) + '&displayFields=' + fields + '&start=1&maxRecs=' + maxRecs     
+              encodeURIComponent(thisQuery) + '&displayFields=' + fields + '&start=1&maxRecs=' + maxRecs    
             queryBatch.push(queryURL)               
           }    
           readyForNext = true                            
@@ -98,11 +97,12 @@
         //The 'inital URL' is queried in order to get a result count
         const initialURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + fields + '&start=1&maxRecs=1'
         const data = await fetch(initialURL)
-        const tableJSON = await data.json()
-        if(tableJSON.catalogLink != "" && catalogLink == "") {
-          catalogLink = tableJSON.catalogLink
-          doc.getElementById("catalogLink").innerHTML = `<a target="_blank" href="${catalogLink}">View in Catalog</a>`
-        }
+        const tableJSON = await data.json()        
+        const catalogLink =  doc.getElementById("catalogLink")
+        catalogLink.innerHTML = ""
+        if(tableJSON.catalogLink != "") {
+          doc.getElementById("catalogLink").innerHTML = `<a target="_blank" href="${tableJSON.catalogLink}">View in Catalog</a>`
+        } 
         totalResults = tableJSON.numberOfRecords
         doc.getElementById('resultCount').innerHTML = 'Found ' + totalResults + ' results'
         var queryMax = Math.min(maxRecs,totalResults)
@@ -161,7 +161,7 @@
 
         //fetch the URL and put the results in the output buffer
         const data = await fetch(queryURL)
-        const tableJSON = await data.json()               
+        const tableJSON = await data.json()       
         if(batchRanges) {
           updateStatus(doc,"Searching row " + (i+1) + " of " + queryBatch.length)
           var combinedBody = Array(tableJSON.records[0].length).fill("")
@@ -180,7 +180,7 @@
           updateStatus(doc,"Retrieved " + Math.min(((i+1)*increment),maxRecs,totalResults) + " of " + Math.min(maxRecs,totalResults) + "  records")
           google.script.run.withSuccessHandler(function() {
             completeQueries++            
-          }).processData(tableJSON.records,(i>0) ? (i*increment+2) : 1,1,(i>0))                
+          }).processData(tableJSON.records,(i>0) ? (i*increment+2) : 1,1,(i>0))    
         }
         i++
         readyForNext = true                        
