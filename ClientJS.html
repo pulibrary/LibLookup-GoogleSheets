@@ -101,7 +101,7 @@
         const catalogLink =  doc.getElementById("catalogLink")
         catalogLink.innerHTML = ""
         if(tableJSON.catalogLink != "") {
-          doc.getElementById("catalogLink").innerHTML = `<a target="_blank" href="${tableJSON.catalogLink}">View in Catalog</a>`
+          catalogLink.innerHTML = `<a target="_blank" href="${tableJSON.catalogLink}">View in Catalog</a>`
         } 
         totalResults = tableJSON.numberOfRecords
         doc.getElementById('resultCount').innerHTML = 'Found ' + totalResults + ' results'
