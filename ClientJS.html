@@ -88,14 +88,14 @@
               }
             }  
             const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + 
-              encodeURIComponent(thisQuery) + '&displayFields=' + fields + '&start=1&maxRecs=' + maxRecs    
+              encodeURIComponent(thisQuery) + '&displayFields=' + encodeURIComponent(fields) + '&start=1&maxRecs=' + maxRecs    
             queryBatch.push(queryURL)               
           }    
           readyForNext = true                            
         }).getRangeValues(batchRanges)  
       } else { //query mode (one query, spreadsheet populated with all results)
         //The 'inital URL' is queried in order to get a result count
-        const initialURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + fields + '&start=1&maxRecs=1'
+        const initialURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + encodeURIComponent(fields) + '&start=1&maxRecs=1'
         const data = await fetch(initialURL)
         const tableJSON = await data.json()        
         const catalogLink =  doc.getElementById("catalogLink")
@@ -107,7 +107,7 @@
         doc.getElementById('resultCount').innerHTML = 'Found ' + totalResults + ' results'
         var queryMax = Math.min(maxRecs,totalResults)
         for(var i = 1; i <= queryMax; i += increment) {
-          const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + fields + '&start=' + i + '&maxRecs=' + Math.min(increment, queryMax-i+1)
+          const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + encodeURIComponent(fields) + '&start=' + i + '&maxRecs=' + Math.min(increment, queryMax-i+1)
           queryBatch.push(queryURL) 
         }
         readyForNext = true              
