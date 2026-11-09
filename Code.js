@@ -12,6 +12,8 @@
     '&nbsp;': ' '
   };
 
+  var callCount = 0
+
 function onOpen() {
   SpreadsheetApp.getUi()
     .createAddonMenu() 
@@ -49,6 +51,12 @@ function getFirstEmptyColumn() {
 }
 
 function processData(tableJSON,startRow = 1,startCol = 1, append = false) {
+
+  callCount++
+  if(callCount % 100 == 0) {
+    Utilities.sleep(500); 
+  }
+
   var sheet = SpreadsheetApp.getActiveSheet();
   
   var numrows = tableJSON.length - 1
