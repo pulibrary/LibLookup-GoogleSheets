@@ -107,7 +107,7 @@
         doc.getElementById('resultCount').innerHTML = 'Found ' + totalResults + ' results'
         var queryMax = Math.min(maxRecs,totalResults)
         for(var i = 1; i <= queryMax; i += increment) {
-          const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + encodeURIComponent(fields) + '&start=' + i + '&maxRecs=' + Math.min(increment, queryMax-i+1)
+          const queryURL = libLookupDomain + '?format=json&catalog=' + catalog + '&q=' + encodeURIComponent(queryDecoded) + '&displayFields=' + encodeURIComponent(fields) + '&start=' + i + '&maxRecs=' + increment 
           queryBatch.push(queryURL) 
         }
         readyForNext = true              
