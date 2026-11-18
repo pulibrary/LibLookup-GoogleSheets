@@ -12,6 +12,7 @@
     '&nbsp;': ' '
   };
 
+  const coolDownInterval = 1000
   var callCount = 0
 
 function onOpen() {
@@ -54,7 +55,7 @@ function processData(tableJSON,startRow = 1,startCol = 1, append = false) {
 
   callCount++
   if(callCount % 100 == 0) {
-    Utilities.sleep(500); 
+    Utilities.sleep(coolDownInterval); 
   }
 
   var sheet = SpreadsheetApp.getActiveSheet();
