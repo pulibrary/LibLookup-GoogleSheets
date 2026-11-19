@@ -67,15 +67,15 @@
       updateStatus(doc,"Searching...")
 
       var queryDecoded = decodeURIComponent(query)
-      var rangeStart = doc.querySelector("#startrow").value
-      var rangeEnd = doc.querySelector("#endrow").value
+      var rangeStart = formData.get('startrow')
+      var rangeEnd = formData.get('endrow')
       const batchRanges = queryDecoded.match(/\[\[[^\]]+\]\]/g)?.map(range => range.replaceAll(/\[\[([A-Z]+)\]\]/g, "$1" + rangeStart + ":$1" + rangeEnd))
   
       //First, the set of query URLs is constructed before any of them are run
       var queryBatch = []
       if(batchRanges) { //batch mode (query performed for each row)
-        startRow = parseInt(batchRanges.join().match(/\d+/)?.[0])
-        startColumn = columnLetterToNumber(doc.querySelector("#resultColumn").value)
+        startRow =  parseInt(batchRanges.join().match(/\d+/)?.[0])
+        startColumn = columnLetterToNumber(formData.get('resultColumn'))
         google.script.run.withSuccessHandler(function(rangeValues) {
           for(var i = 0; i < rangeValues[0].length; i++) {
             var thisQuery = queryDecoded
@@ -100,7 +100,7 @@
         const tableJSON = await data.json()        
         const catalogLink =  doc.getElementById("catalogLink")
         catalogLink.innerHTML = ""
-        if(tableJSON.catalogLink != "") {
+        if(catalogLink && tableJSON.catalogLink != "") {
           catalogLink.innerHTML = `<a target="_blank" href="${tableJSON.catalogLink}">View in Catalog</a>`
         } 
         totalResults = tableJSON.numberOfRecords
