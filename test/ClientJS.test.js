@@ -9,15 +9,15 @@ const clientJSFilename = '../ClientJS.js'
 const mockFormHTML = './MockForm.html'
 
 const notRunning = "LibLookup Desktop app is not running."
-const firstEmptyColumnLetter = "C"
-const firstEmptyColumnNumber = 3
+const firstEmptyColumnLetter = "D"
+const firstEmptyColumnNumber = 4
 const maxRowNumber = 1234
 
 const catalogs = ["Grievances","Petitions"]
 const query = "date = 1857"
 const batchQuery = "id = [[A]] AND date = [[B]]"
 const batchRanges = [[1,2,3,4,5,""],[6,7,8,9,0,""]]
-const fields = ['recno','name','type']
+const fields = ['recno','recno','name','type']
 const record = ['Arthur Clenham','Grievance']
 const catalogLink = "https://office.circumlocution.go.uk/"
 const numberOfRecords = 200
